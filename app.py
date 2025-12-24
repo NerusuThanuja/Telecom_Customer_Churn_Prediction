@@ -1,134 +1,71 @@
 import streamlit as st
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
+import joblib
 
-st.set_page_config(page_title="Telecom Customer Churn Prediction")
+# Page config
+st.set_page_config(page_title="Telecom Customer Churn", layout="centered")
 
-@st.cache_resource
-def train_model():
-    df = pd.read_csv("telco.csv")
+# Load model and features
+model = joblib.load("churn_model.pkl")
+features = joblib.load("features.pkl")
 
-    # Rename columns safely
-    df.columns = df.columns.str.strip()
-
-    # Map target column
-    churn_col = None
-    for col in df.columns:
-        if col.lower() in ["churn", "churn label", "customer status"]:
-            churn_col = col
-            break
-
-    if churn_col is None:
-        st.error("Churn column not found in dataset")
-        st.stop()
-
-    df[churn_col] = df[churn_col].astype(str).str.lower().map(
-        {"yes": 1, "no": 0, "churned": 1, "active": 0}
-    )
-
-    # Select ONLY 5 professional features
-    selected_features = [
-        "tenure",
-        "monthlycharges",
-        "contract",
-        "internetservice",
-        "seniorcitizen"
-    ]
-
-    # Normalize column names
-    df.columns = df.columns.str.lower()
-
-    df = df[selected_features + [churn_col]].dropna()
-
-    # Encode categorical features
-    df["contract"] = df["contract"].map({
-        "month-to-month": 0,
-        "one year": 1,
-        "two year": 2
-    })
-
-    df["internetservice"] = df["internetservice"].map({
-        "dsl": 0,
-        "fiber optic": 1,
-        "no": 2
-    })
-
-    X = df[selected_features]
-    y = df[churn_col]
-
-    X_train, _, y_train, _ = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-
-    model = RandomForestClassifier(
-        n_estimators=120,
-        max_depth=6,
-        random_state=42
-    )
-    model.fit(X_train, y_train)
-
-    return model
-
-model = train_model()
-
-# ---------------- UI ---------------- #
-
+# Title
 st.title("📊 Telecom Customer Churn Prediction")
-st.write("Enter customer details below:")
+st.markdown("Predict whether a telecom customer is likely to **churn or stay**.")
 
+st.divider()
+
+# User inputs
 tenure = st.number_input("Tenure (months)", min_value=0, max_value=72, value=12)
-monthly_charges = st.number_input("Monthly Charges", value=75.0)
+monthly_charges = st.number_input("Monthly Charges", min_value=0.0, value=70.0)
 
 contract = st.selectbox(
     "Contract Type",
-    ["Month-to-month", "One year", "Two year"]
+    options=["Month-to-month", "One year", "Two year"]
 )
-contract_val = {"Month-to-month": 0, "One year": 1, "Two year": 2}[contract]
 
-internet = st.selectbox(
+internet_service = st.selectbox(
     "Internet Service",
-    ["DSL", "Fiber optic", "No"]
+    options=["DSL", "Fiber optic", "No"]
 )
-internet_val = {"DSL": 0, "Fiber optic": 1, "No": 2}[internet]
 
-senior = st.selectbox(
+senior_citizen = st.selectbox(
     "Senior Citizen",
-    ["No", "Yes"]
+    options=["No", "Yes"]
 )
-senior_val = 1 if senior == "Yes" else 0
 
-if st.button("Predict"):
-    input_data = [[
+# Encode inputs
+contract_map = {
+    "Month-to-month": 0,
+    "One year": 1,
+    "Two year": 2
+}
+
+internet_map = {
+    "DSL": 0,
+    "Fiber optic": 1,
+    "No": 2
+}
+
+senior_map = {
+    "No": 0,
+    "Yes": 1
+}
+
+# Predict
+if st.button("🔍 Predict Churn"):
+    input_df = pd.DataFrame([[
         tenure,
         monthly_charges,
-        contract_val,
-        internet_val,
-        senior_val
-    ]]
-
-    # STEP 3 GOES HERE 👇
-    input_df = pd.DataFrame(
-        input_data,
-        columns=[
-            "Tenure",
-            "Monthly Charges",
-            "Contract",
-            "Internet Service",
-            "Senior Citizen"
-        ]
-    )
+        contract_map[contract],
+        internet_map[internet_service],
+        senior_map[senior_citizen]
+    ]], columns=features)
 
     prediction = model.predict(input_df)[0]
+    probability = model.predict_proba(input_df)[0][1]
 
     if prediction == 1:
-        st.error("⚠️ Customer is likely to CHURN")
+        st.error(f"⚠️ Customer is likely to CHURN\n\nChurn Probability: **{probability:.2%}**")
     else:
-        st.success("✅ Customer is likely to STAY")
-
-    prediction = model.predict(input_data)[0]
-
-    if prediction == 1:
-        st.error("❌ Customer is likely to churn")
-    else:
-        st.success("✅ Customer is NOT likely to churn")
+        st.success(f"✅ Customer is likely to STAY\n\nChurn Probability: **{probability:.2%}**")
