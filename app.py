@@ -10,30 +10,39 @@ st.set_page_config(page_title="Telecom Customer Churn Prediction")
 def train_and_get_model():
     df = pd.read_csv("telco.csv")
 
-    # 🔍 Find churn column safely
-    churn_col = None
+    # 🔍 Automatically detect churn column
+    possible_targets = [
+        "churn", "churn label", "customer status",
+        "churn_category", "exited"
+    ]
+
+    target_column = None
     for col in df.columns:
-        if col.lower() == "churn":
-            churn_col = col
+        if col.strip().lower() in possible_targets:
+            target_column = col
             break
 
-    if churn_col is None:
-        st.error("❌ No 'Churn' column found in dataset")
+    if target_column is None:
+        st.error(f"❌ No churn column found. Available columns: {list(df.columns)}")
         st.stop()
 
-    # Encode target
-    df[churn_col] = df[churn_col].map({"Yes": 1, "No": 0})
+    # Convert target to binary
+    df[target_column] = df[target_column].astype(str).str.lower().map(
+        {"yes": 1, "no": 0, "churned": 1, "active": 0}
+    )
+
+    df = df.dropna(subset=[target_column])
 
     # Encode categorical features
     for col in df.select_dtypes(include="object").columns:
-        if col != churn_col:
+        if col != target_column:
             le = LabelEncoder()
             df[col] = le.fit_transform(df[col])
 
-    X = df.drop(churn_col, axis=1)
-    y = df[churn_col]
+    X = df.drop(target_column, axis=1)
+    y = df[target_column]
 
-    X_train, X_test, y_train, y_test = train_test_split(
+    X_train, _, y_train, _ = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
@@ -42,10 +51,11 @@ def train_and_get_model():
         max_depth=6,
         random_state=42
     )
-
     model.fit(X_train, y_train)
 
     return model, X.columns
+
+# ---------------- UI ---------------- #
 
 st.title("📊 Telecom Customer Churn Prediction")
 
@@ -63,4 +73,4 @@ if st.button("Predict Churn"):
     if prediction == 1:
         st.error("❌ Customer is likely to churn")
     else:
-        st.success("✅ Customer is not likely to churn")
+        st.success("✅ Customer is NOT likely to churn")
