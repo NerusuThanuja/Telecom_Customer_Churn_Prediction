@@ -98,7 +98,7 @@ senior = st.selectbox(
 )
 senior_val = 1 if senior == "Yes" else 0
 
-if st.button("Predict Churn"):
+if st.button("Predict"):
     input_data = [[
         tenure,
         monthly_charges,
@@ -106,6 +106,25 @@ if st.button("Predict Churn"):
         internet_val,
         senior_val
     ]]
+
+    # STEP 3 GOES HERE 👇
+    input_df = pd.DataFrame(
+        input_data,
+        columns=[
+            "Tenure",
+            "Monthly Charges",
+            "Contract",
+            "Internet Service",
+            "Senior Citizen"
+        ]
+    )
+
+    prediction = model.predict(input_df)[0]
+
+    if prediction == 1:
+        st.error("⚠️ Customer is likely to CHURN")
+    else:
+        st.success("✅ Customer is likely to STAY")
 
     prediction = model.predict(input_data)[0]
 
