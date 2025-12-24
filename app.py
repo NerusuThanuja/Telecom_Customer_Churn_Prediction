@@ -1,84 +1,58 @@
 import streamlit as st
-import numpy as np
+import pandas as pd
 import joblib
+import os
 
-# Load model
-model = joblib.load("churn_model.pkl")
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder
 
-st.set_page_config(
-    page_title="Telecom Customer Churn Predictor",
-    layout="centered"
-)
+st.set_page_config(page_title="Telecom Churn Prediction", layout="centered")
 
-st.title("📡 Telecom Customer Churn Prediction")
-st.markdown(
-    "Predict whether a telecom customer is likely to **churn** using key business indicators."
-)
+@st.cache_resource
+def train_and_get_model():
+    df = pd.read_csv("telco.csv")
 
-# Inputs
-tenure = st.slider("Customer Tenure (months)", 0, 72, 12)
-monthly_charges = st.slider("Monthly Charges", 20.0, 150.0, 70.0)
+    # Target
+    target_column = "Churn"
+    df[target_column] = df[target_column].map({"Yes": 1, "No": 0})
 
-contract = st.selectbox(
-    "Contract Type",
-    ["Month-to-month", "One year", "Two year"]
-)
+    # Encode categorical columns
+    for col in df.select_dtypes(include="object").columns:
+        if col != target_column:
+            le = LabelEncoder()
+            df[col] = le.fit_transform(df[col])
 
-payment_method = st.selectbox(
-    "Payment Method",
-    ["Electronic check", "Mailed check", "Bank transfer", "Credit card"]
-)
+    X = df.drop(target_column, axis=1)
+    y = df[target_column]
 
-internet_service = st.selectbox(
-    "Internet Service",
-    ["DSL", "Fiber optic", "No"]
-)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
 
-tech_support = st.selectbox(
-    "Tech Support",
-    ["Yes", "No"]
-)
+    model = RandomForestClassifier(
+        n_estimators=150,
+        max_depth=6,
+        random_state=42
+    )
 
-# Encoding maps (must match training)
-contract_map = {
-    "Month-to-month": 0,
-    "One year": 1,
-    "Two year": 2
-}
+    model.fit(X_train, y_train)
+    return model, X.columns
 
-payment_map = {
-    "Electronic check": 0,
-    "Mailed check": 1,
-    "Bank transfer": 2,
-    "Credit card": 3
-}
+st.title("📊 Telecom Customer Churn Prediction")
 
-internet_map = {
-    "DSL": 0,
-    "Fiber optic": 1,
-    "No": 2
-}
+model, feature_names = train_and_get_model()
 
-tech_map = {
-    "No": 0,
-    "Yes": 1
-}
+st.subheader("Enter Customer Details")
 
-# Prepare input
-input_data = np.array([[
-    tenure,
-    monthly_charges,
-    contract_map[contract],
-    payment_map[payment_method],
-    internet_map[internet_service],
-    tech_map[tech_support]
-]])
+user_input = []
+for feature in feature_names:
+    value = st.number_input(f"{feature}", value=0.0)
+    user_input.append(value)
 
-# Prediction
 if st.button("Predict Churn"):
-    prediction = model.predict(input_data)[0]
-
+    prediction = model.predict([user_input])[0]
     if prediction == 1:
         st.error("❌ Customer is likely to CHURN")
     else:
-        st.success("✅ Customer is likely to STAY")
+        st.success("✅ Customer is NOT likely to churn")
