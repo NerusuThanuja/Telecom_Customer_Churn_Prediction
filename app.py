@@ -2,74 +2,113 @@ import streamlit as st
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import LabelEncoder
 
 st.set_page_config(page_title="Telecom Customer Churn Prediction")
 
 @st.cache_resource
-def train_and_get_model():
+def train_model():
     df = pd.read_csv("telco.csv")
 
-    # 🔍 Automatically detect churn column
-    possible_targets = [
-        "churn", "churn label", "customer status",
-        "churn_category", "exited"
-    ]
+    # Rename columns safely
+    df.columns = df.columns.str.strip()
 
-    target_column = None
+    # Map target column
+    churn_col = None
     for col in df.columns:
-        if col.strip().lower() in possible_targets:
-            target_column = col
+        if col.lower() in ["churn", "churn label", "customer status"]:
+            churn_col = col
             break
 
-    if target_column is None:
-        st.error(f"❌ No churn column found. Available columns: {list(df.columns)}")
+    if churn_col is None:
+        st.error("Churn column not found in dataset")
         st.stop()
 
-    # Convert target to binary
-    df[target_column] = df[target_column].astype(str).str.lower().map(
+    df[churn_col] = df[churn_col].astype(str).str.lower().map(
         {"yes": 1, "no": 0, "churned": 1, "active": 0}
     )
 
-    df = df.dropna(subset=[target_column])
+    # Select ONLY 5 professional features
+    selected_features = [
+        "tenure",
+        "monthlycharges",
+        "contract",
+        "internetservice",
+        "seniorcitizen"
+    ]
+
+    # Normalize column names
+    df.columns = df.columns.str.lower()
+
+    df = df[selected_features + [churn_col]].dropna()
 
     # Encode categorical features
-    for col in df.select_dtypes(include="object").columns:
-        if col != target_column:
-            le = LabelEncoder()
-            df[col] = le.fit_transform(df[col])
+    df["contract"] = df["contract"].map({
+        "month-to-month": 0,
+        "one year": 1,
+        "two year": 2
+    })
 
-    X = df.drop(target_column, axis=1)
-    y = df[target_column]
+    df["internetservice"] = df["internetservice"].map({
+        "dsl": 0,
+        "fiber optic": 1,
+        "no": 2
+    })
+
+    X = df[selected_features]
+    y = df[churn_col]
 
     X_train, _, y_train, _ = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
     model = RandomForestClassifier(
-        n_estimators=150,
+        n_estimators=120,
         max_depth=6,
         random_state=42
     )
     model.fit(X_train, y_train)
 
-    return model, X.columns
+    return model
+
+model = train_model()
 
 # ---------------- UI ---------------- #
 
 st.title("📊 Telecom Customer Churn Prediction")
+st.write("Enter customer details below:")
 
-model, feature_names = train_and_get_model()
+tenure = st.number_input("Tenure (months)", min_value=0, max_value=72, value=12)
+monthly_charges = st.number_input("Monthly Charges", value=75.0)
 
-st.subheader("Enter Customer Details")
+contract = st.selectbox(
+    "Contract Type",
+    ["Month-to-month", "One year", "Two year"]
+)
+contract_val = {"Month-to-month": 0, "One year": 1, "Two year": 2}[contract]
 
-user_input = []
-for feature in feature_names:
-    value = st.number_input(feature, value=0.0)
-    user_input.append(value)
+internet = st.selectbox(
+    "Internet Service",
+    ["DSL", "Fiber optic", "No"]
+)
+internet_val = {"DSL": 0, "Fiber optic": 1, "No": 2}[internet]
+
+senior = st.selectbox(
+    "Senior Citizen",
+    ["No", "Yes"]
+)
+senior_val = 1 if senior == "Yes" else 0
 
 if st.button("Predict Churn"):
-    prediction = model.predict([user_input])[0]
+    input_data = [[
+        tenure,
+        monthly_charges,
+        contract_val,
+        internet_val,
+        senior_val
+    ]]
+
+    prediction = model.predict(input_data)[0]
+
     if prediction == 1:
         st.error("❌ Customer is likely to churn")
     else:
