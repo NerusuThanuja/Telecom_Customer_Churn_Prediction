@@ -1,30 +1,37 @@
 import streamlit as st
 import pandas as pd
-import joblib
-import os
-
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 
-st.set_page_config(page_title="Telecom Churn Prediction", layout="centered")
+st.set_page_config(page_title="Telecom Customer Churn Prediction")
 
 @st.cache_resource
 def train_and_get_model():
     df = pd.read_csv("telco.csv")
 
-    # Target
-    target_column = "Churn"
-    df[target_column] = df[target_column].map({"Yes": 1, "No": 0})
+    # 🔍 Find churn column safely
+    churn_col = None
+    for col in df.columns:
+        if col.lower() == "churn":
+            churn_col = col
+            break
 
-    # Encode categorical columns
+    if churn_col is None:
+        st.error("❌ No 'Churn' column found in dataset")
+        st.stop()
+
+    # Encode target
+    df[churn_col] = df[churn_col].map({"Yes": 1, "No": 0})
+
+    # Encode categorical features
     for col in df.select_dtypes(include="object").columns:
-        if col != target_column:
+        if col != churn_col:
             le = LabelEncoder()
             df[col] = le.fit_transform(df[col])
 
-    X = df.drop(target_column, axis=1)
-    y = df[target_column]
+    X = df.drop(churn_col, axis=1)
+    y = df[churn_col]
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
@@ -37,6 +44,7 @@ def train_and_get_model():
     )
 
     model.fit(X_train, y_train)
+
     return model, X.columns
 
 st.title("📊 Telecom Customer Churn Prediction")
@@ -47,12 +55,12 @@ st.subheader("Enter Customer Details")
 
 user_input = []
 for feature in feature_names:
-    value = st.number_input(f"{feature}", value=0.0)
+    value = st.number_input(feature, value=0.0)
     user_input.append(value)
 
 if st.button("Predict Churn"):
     prediction = model.predict([user_input])[0]
     if prediction == 1:
-        st.error("❌ Customer is likely to CHURN")
+        st.error("❌ Customer is likely to churn")
     else:
-        st.success("✅ Customer is NOT likely to churn")
+        st.success("✅ Customer is not likely to churn")
