@@ -27,6 +27,3 @@ Customer churn is a major challenge in the telecom industry. This project uses m
 - VS Code
 - GitHub
 
----
-
-## 🏗️ Project Structure
